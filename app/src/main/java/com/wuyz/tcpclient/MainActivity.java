@@ -361,11 +361,14 @@ public class MainActivity extends Activity implements View.OnClickListener {
                     toast("Download failed: file md5 is not correct");
                     return;
                 }
-                Intent intent = new Intent(Intent.ACTION_INSTALL_PACKAGE);
-                intent.setData(Uri.fromFile(downloadFile));
-                intent.putExtra(Intent.EXTRA_ALLOW_REPLACE, true);
-                intent.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
-                startActivity(intent);
+                toast("Download succeed!");
+                if (downloadFile.getName().toLowerCase().endsWith(".apk")) {
+                    Intent intent = new Intent(Intent.ACTION_INSTALL_PACKAGE);
+                    intent.setData(Uri.fromFile(downloadFile));
+                    intent.putExtra(Intent.EXTRA_ALLOW_REPLACE, true);
+                    intent.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
+                    startActivity(intent);
+                }
             } catch (Exception e) {
                 Log2.e(TAG, e);
                 toast(e.getMessage());
