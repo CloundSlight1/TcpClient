@@ -11,7 +11,8 @@ import android.os.AsyncTask;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.view.View;
-import android.widget.EditText;
+import android.widget.ArrayAdapter;
+import android.widget.AutoCompleteTextView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -25,7 +26,9 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.security.MessageDigest;
+import java.util.HashSet;
 import java.util.Locale;
+import java.util.Set;
 
 public class MainActivity extends Activity implements View.OnClickListener {
 
@@ -33,7 +36,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
 
     private static final char[] HEX_CHAR = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
 
-    private EditText addressText;
+    private AutoCompleteTextView addressText;
     private TextView outputText;
     private Socket socket;
     private String name;
@@ -43,6 +46,8 @@ public class MainActivity extends Activity implements View.OnClickListener {
     private ProgressDialog progressDialog;
     private DownloadTask downloadTask;
     private SharedPreferences preferences;
+    private Set<String> addresses;
+    private ArrayAdapter<String> adapter;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -51,11 +56,21 @@ public class MainActivity extends Activity implements View.OnClickListener {
 
         preferences = PreferenceManager.getDefaultSharedPreferences(this);
 
-        addressText = (EditText) findViewById(com.wuyz.tcpclient.R.id.address);
+        addressText = (AutoCompleteTextView) findViewById(R.id.address);
         outputText = (TextView) findViewById(com.wuyz.tcpclient.R.id.output);
         findViewById(com.wuyz.tcpclient.R.id.get_file_info).setOnClickListener(this);
         findViewById(com.wuyz.tcpclient.R.id.download).setOnClickListener(this);
-        addressText.setText(preferences.getString("ip", "192.168.0.1:9999"));
+
+        addresses = preferences.getStringSet("addresses", new HashSet<String>(10));
+        if (addresses.isEmpty())
+            addresses.add("192.168.0.1:9999");
+        adapter = new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line);
+//        List<String> list = new ArrayList<>(addresses.size());
+//        for (String address : addresses) {
+//            list.add(address);
+//        }
+        adapter.addAll(addresses);
+        addressText.setAdapter(adapter);
     }
 
     @Override
@@ -120,7 +135,6 @@ public class MainActivity extends Activity implements View.OnClickListener {
             downloadTask.cancel(true);
             downloadTask = null;
         }
-        preferences.edit().putString("ip", addressText.getText().toString().trim()).apply();
         super.onDestroy();
     }
 
@@ -184,6 +198,14 @@ public class MainActivity extends Activity implements View.OnClickListener {
             readFileInfo(inputStream);
             inputStream.close();
             outputStream.close();
+
+            String key = address + ":" + port;
+            boolean isNew = addresses.add(key);
+            if (isNew) {
+                preferences.edit().putStringSet("addresses", addresses).apply();
+                adapter.add(key);
+            }
+
         } catch (IOException e) {
             Log2.e(TAG, e);
             output(e.getMessage() + "\n");
