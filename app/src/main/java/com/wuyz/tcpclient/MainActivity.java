@@ -1,7 +1,9 @@
 package com.wuyz.tcpclient;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.app.ProgressDialog;
+import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
@@ -35,12 +37,13 @@ public class MainActivity extends Activity implements View.OnClickListener {
     private static final String TAG = "MainActivity";
 
     private static final char[] HEX_CHAR = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'};
+    private static final String DEFAULT_IP = "192.168.0.1:9999";
 
     private AutoCompleteTextView addressText;
     private TextView outputText;
     private Socket socket;
     private String name;
-    private String md5;
+    private String sha1;
     private long length;
     private File downloadFile;
     private ProgressDialog progressDialog;
@@ -63,7 +66,8 @@ public class MainActivity extends Activity implements View.OnClickListener {
 
         addresses = preferences.getStringSet("addresses", new HashSet<String>(10));
         if (addresses.isEmpty())
-            addresses.add("192.168.0.1:9999");
+            addresses.add(DEFAULT_IP);
+        addressText.setText(preferences.getString("lastIp", DEFAULT_IP));
         adapter = new ArrayAdapter<>(this, android.R.layout.simple_dropdown_item_1line);
 //        List<String> list = new ArrayList<>(addresses.size());
 //        for (String address : addresses) {
@@ -140,7 +144,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
 
     private boolean readFileInfo(InputStream inputStream) throws IOException{
         name = null;
-        md5 = null;
+        sha1 = null;
         length = 0;
         byte[] buffer = new byte[1024];
         int n, m;
@@ -174,9 +178,9 @@ public class MainActivity extends Activity implements View.OnClickListener {
         if (n > 0) {
             m = inputStream.read(buffer, 0, n);
             if (m == n) {
-                md5 = new String(buffer, 0, n);
-                Log2.d(TAG, "md5: %s", md5);
-                output(String.format("md5: %s\n", md5));
+                sha1 = new String(buffer, 0, n);
+                Log2.d(TAG, "sha1: %s", sha1);
+                output(String.format("sha1: %s\n", sha1));
             } else
                 return false;
         } else
@@ -200,12 +204,12 @@ public class MainActivity extends Activity implements View.OnClickListener {
             outputStream.close();
 
             String key = address + ":" + port;
+            preferences.edit().putString("lastIp", key).apply();
             boolean isNew = addresses.add(key);
             if (isNew) {
                 preferences.edit().putStringSet("addresses", addresses).apply();
                 adapter.add(key);
             }
-
         } catch (IOException e) {
             Log2.e(TAG, e);
             output(e.getMessage() + "\n");
@@ -255,11 +259,11 @@ public class MainActivity extends Activity implements View.OnClickListener {
         return String.format(Locale.getDefault(), "%.1fG", length);
     }
 
-    public static String getMd5(InputStream input) {
+    public static String getSHA1(InputStream input) {
         byte[] data = new byte[1024];
         int n;
         try {
-            MessageDigest mdInst = MessageDigest.getInstance("MD5");
+            MessageDigest mdInst = MessageDigest.getInstance("SHA1");
             while ((n = input.read(data)) > 0) {
                 mdInst.update(data, 0, n);
             }
@@ -378,23 +382,45 @@ public class MainActivity extends Activity implements View.OnClickListener {
             }
             output(downloadFile.getAbsolutePath());
             try (FileInputStream fileInputStream = new FileInputStream(downloadFile)) {
-                String currentMd5 = getMd5(fileInputStream);
-                if (currentMd5 == null || !currentMd5.equals(md5)) {
-                    toast("Download failed: file md5 is not correct");
+                String currentSHA1 = getSHA1(fileInputStream);
+                Log2.d(TAG, "currentSHA1 %s", currentSHA1);
+                if (currentSHA1 == null || !currentSHA1.equals(sha1)) {
+                    AlertDialog.Builder builder = new AlertDialog.Builder(MainActivity.this);
+                    builder.setMessage("sha1 is not correct, install it anyway?");
+                    builder.setPositiveButton(android.R.string.ok, new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            tryInstallFile();
+                        }
+                    });
+                    builder.setNegativeButton(android.R.string.cancel, new DialogInterface.OnClickListener() {
+                        @Override
+                        public void onClick(DialogInterface dialog, int which) {
+                            if (downloadFile.exists() && downloadFile.isFile()) {
+                                downloadFile.delete();
+                                downloadFile = null;
+                            }
+                        }
+                    });
+                    builder.show();
                     return;
                 }
                 toast("Download succeed!");
-                if (downloadFile.getName().toLowerCase().endsWith(".apk")) {
-                    Intent intent = new Intent(Intent.ACTION_INSTALL_PACKAGE);
-                    intent.setData(Uri.fromFile(downloadFile));
-                    intent.putExtra(Intent.EXTRA_ALLOW_REPLACE, true);
-                    intent.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
-                    startActivity(intent);
-                }
+                tryInstallFile();
             } catch (Exception e) {
                 Log2.e(TAG, e);
                 toast(e.getMessage());
             }
+        }
+    }
+
+    private void tryInstallFile() {
+        if (downloadFile.getName().toLowerCase().endsWith(".apk")) {
+            Intent intent = new Intent(Intent.ACTION_INSTALL_PACKAGE);
+            intent.setData(Uri.fromFile(downloadFile));
+            intent.putExtra(Intent.EXTRA_ALLOW_REPLACE, true);
+            intent.putExtra(Intent.EXTRA_NOT_UNKNOWN_SOURCE, true);
+            startActivity(intent);
         }
     }
 }
