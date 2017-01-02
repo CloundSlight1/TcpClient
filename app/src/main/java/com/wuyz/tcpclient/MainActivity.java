@@ -18,6 +18,7 @@ import android.widget.AutoCompleteTextView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.BufferedOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -154,7 +155,7 @@ public class MainActivity extends Activity implements View.OnClickListener {
         if (n > 0) {
             m = inputStream.read(buffer, 0, n);
             if (m == n) {
-                name = new String(buffer, 0, n);
+                name = new String(buffer, 0, n, "gbk");
                 Log2.d(TAG, "name: %s", name);
                 output(String.format("name: %s\n", name));
             } else
@@ -327,14 +328,14 @@ public class MainActivity extends Activity implements View.OnClickListener {
                 InputStream inputStream = socket.getInputStream();
                 getExternalFilesDir(null).mkdirs();
                 downloadFile = new File(getExternalFilesDir(null), name);
-                try (FileOutputStream fileOutputStream = new FileOutputStream(downloadFile)) {
-                    byte[] buffer = new byte[1024];
+                try (BufferedOutputStream bufferedOutputStream = new BufferedOutputStream(new FileOutputStream(downloadFile))) {
+                    byte[] buffer = new byte[4096 - 1];
                     int n;
                     output("download begin\n");
                     long total = 0;
                     while ((n = inputStream.read(buffer)) != -1) {
 //                        Log2.d(TAG, "total = %d", total);
-                        fileOutputStream.write(buffer, 0, n);
+                        bufferedOutputStream.write(buffer, 0, n);
                         total += n;
                         publishProgress(total);
 //                        try {
